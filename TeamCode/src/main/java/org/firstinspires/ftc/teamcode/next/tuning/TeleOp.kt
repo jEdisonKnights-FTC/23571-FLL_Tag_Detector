@@ -7,12 +7,19 @@ import org.firstinspires.ftc.vision.VisionPortal
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor
 import com.qualcomm.ftccommon.SoundPlayer
+import com.qualcomm.robotcore.hardware.DcMotor
+import com.sun.tools.doclint.Entity
 import dev.nextftc.core.components.BindingsComponent
 import dev.nextftc.core.components.SubsystemComponent
 import dev.nextftc.ftc.NextFTCOpMode
 import dev.nextftc.ftc.components.BulkReadComponent
+import org.firstinspires.ftc.robotcore.external.android.AndroidSoundPool
+import org.firstinspires.ftc.robotcore.internal.android.SoundPoolIntf
+import java.lang.Math.pow
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 @TeleOp
 class TeleOp : NextFTCOpMode() {
@@ -27,6 +34,7 @@ class TeleOp : NextFTCOpMode() {
     var targetAcquired = false
     var Dist1 = 0.0
     var Dist2 = 0.0
+    var Theta = 0.0
     /**
      * The variable to store our instance of the AprilTag processor.
      */
@@ -40,6 +48,8 @@ class TeleOp : NextFTCOpMode() {
     override fun runOpMode() {
         initAprilTag()
 
+        aS.initialize(SoundPlayer.getInstance())
+
         // Wait for the DS start button to be touched.
         telemetry.addData("DS preview on/off", "3 dots, Camera Stream")
         telemetry.addData(">", "Touch START to start OpMode")
@@ -52,10 +62,16 @@ class TeleOp : NextFTCOpMode() {
 
                 // Push telemetry to the Driver Station.
                 telemetry.update()
+                if(targetAcquired){
+                    sleep(20000) //20 seconds
+                }else{
+                    sleep(20)
+                }
                 // Share the CPU.
-                sleep(20)
             }
         }
+
+        aS.close()
 
         // Save more CPU resources when camera is no longer needed.
         visionPortal!!.close()
@@ -88,24 +104,54 @@ class TeleOp : NextFTCOpMode() {
     /**
      * Add telemetry about AprilTag detections.
      */
+    val aS by lazy { AndroidSoundPool() }
+
     private fun telemetryAprilTag() {
-        val currentDetections: MutableList<AprilTagDetection> = aprilTag!!.detections
+        val currentDetections: MutableList<AprilTagDetection> = aprilTag!!.getDetections()
+
         for (detection in currentDetections) {
             Dist1 = detection.ftcPose.y*sin(detection.ftcPose.yaw)
             Dist2 = detection.ftcPose.y*cos(detection.ftcPose.yaw)
+            Theta = detection.ftcPose.yaw
+            val d = sqrt(pow(Dist1, 2.0) + pow(Dist2, 2.0))
+            val d2T = Dist2 * sin(Theta)  / Dist1
+            val targetAngle = 180.0 - d2T - Theta
+            telemetry.addData("Target angle", targetAngle)
+
+            val t: String = ( when(floor(d / 12).toInt()) {
+                    0 -> { "1-step.mp3"}
+                    1 -> { "2-steps"}
+                    2 -> {""}
+                    3 -> {}
+                    4 -> {}
+                    5 -> {}
+                    else -> {}
+                }
+            )
+
+            aS.play(t)
+
+
+            aS.volume = 100.0f
+            telemetry.addData(" AprilTags Detected", currentDetections.size)
+            telemetry.addLine("\nkey:\nXYZ = X (Right), Y (Forward), Z (Up) dist.")
+            telemetry.addLine("PRY = Pitch, Roll & Yaw (XYZ Rotation)")
+            telemetry.addLine("RBE = Range, Bearing & Elevation")
+            telemetry.addLine(String.format ("Opposite = %.1f", Dist1))
+            telemetry.addLine(String.format ("Ajacent = %.1f", Dist2))
+            telemetry.addLine(String.format ("Theta = %.2f", Theta))
+
+
         }
+
         if (currentDetections.isNotEmpty()) {
             targetAcquired = true
+            aS.play("Relocate April tag.mp3")
         } else {
             targetAcquired = false
         }
-        telemetry.addData(" AprilTags Detected", currentDetections.size)
 
         // Add "key" information to telemetry
-        telemetry.addLine("\nkey:\nXYZ = X (Right), Y (Forward), Z (Up) dist.")
-        telemetry.addLine("PRY = Pitch, Roll & Yaw (XYZ Rotation)")
-        telemetry.addLine("RBE = Range, Bearing & Elevation")
-        telemetry.addLine(String.format ("Dist1 = %.2f", Dist1))
-        telemetry.addLine(String.format ("Dist2 = %.2f", Dist2))
     } // end method telemetryAprilTag()
+
 } // end class
